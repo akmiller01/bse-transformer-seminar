@@ -53,9 +53,9 @@ def data_prep_openml():
     cat_dims = []
     
     y_mean, y_std = y.mean(0), y.std(0)
-    # y_train = (y_train - y_mean) / y_std
-    # y_test = (y_test - y_mean) / y_std
-    # y_valid = (y_valid - y_mean) / y_std
+    y_train = (y_train - y_mean) / y_std
+    y_test = (y_test - y_mean) / y_std
+    y_valid = (y_valid - y_mean) / y_std
 
     X_valid = {
         'data': X_valid,
