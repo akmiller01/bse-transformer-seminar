@@ -16,8 +16,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--vision_dset', action = 'store_true')
 parser.add_argument('--task', type=str,choices = ['binary','multiclass','regression'], default='regression')
 parser.add_argument('--cont_embeddings', default='MLP', type=str,choices = ['MLP','Noemb','pos_singleMLP'])
-parser.add_argument('--embedding_size', default=64, type=int)
-parser.add_argument('--transformer_depth', default=4, type=int)
+parser.add_argument('--embedding_size', default=32, type=int)
+parser.add_argument('--transformer_depth', default=1, type=int)
 parser.add_argument('--attention_heads', default=4, type=int)
 parser.add_argument('--attention_dropout', default=0.1, type=float)
 parser.add_argument('--ff_dropout', default=0.1, type=float)
@@ -27,7 +27,7 @@ parser.add_argument('--optimizer', default='AdamW', type=str,choices = ['AdamW',
 parser.add_argument('--scheduler', default='cosine', type=str,choices = ['cosine','linear'])
 
 parser.add_argument('--lr', default=0.0001, type=float)
-parser.add_argument('--epochs', default=1000, type=int)
+parser.add_argument('--epochs', default=100, type=int)
 parser.add_argument('--batchsize', default=256, type=int)
 parser.add_argument('--savemodelroot', default='./bestmodels', type=str)
 parser.add_argument('--run_name', default='testrun', type=str)
@@ -88,6 +88,9 @@ else:
 
 trainloader = DataLoader(train_ds, batch_size=opt.batchsize, shuffle=True,num_workers=num_workers)
 
+valid_ds = DataSetCatCon(X_valid, y_valid, cat_idxs,opt.dtask, continuous_mean_std)
+validloader = DataLoader(valid_ds, batch_size=opt.batchsize, shuffle=False,num_workers=num_workers)
+
 test_ds = DataSetCatCon(X_test, y_test, cat_idxs,opt.dtask, continuous_mean_std)
 testloader = DataLoader(test_ds, batch_size=opt.batchsize, shuffle=False,num_workers=num_workers)
 if opt.task == 'regression':
@@ -140,8 +143,11 @@ elif opt.optimizer == 'Adam':
     optimizer = optim.Adam(model.parameters(),lr=opt.lr)
 elif opt.optimizer == 'AdamW':
     optimizer = optim.AdamW(model.parameters(),lr=opt.lr)
+best_valid_auroc = 0
+best_valid_accuracy = 0
 best_test_auroc = 0
 best_test_accuracy = 0
+best_valid_rmse = 10000000000
 best_test_rmse = 10000000000
 print('Training begins now.')
 for epoch in range(opt.epochs):
@@ -173,34 +179,43 @@ for epoch in range(opt.epochs):
             with torch.no_grad():
                 if opt.task in ['binary','multiclass']:
                     train_accuracy, train_auroc = classification_scores(model, trainloader, device, opt.task,vision_dset)
+                    accuracy, auroc = classification_scores(model, validloader, device, opt.task,vision_dset)
                     test_accuracy, test_auroc = classification_scores(model, testloader, device, opt.task,vision_dset)
 
                     print('[EPOCH %d] TRAIN ACCURACY: %.3f, TRAIN AUROC: %.3f' %
                         (epoch + 1, train_accuracy,train_auroc ))
+                    print('[EPOCH %d] VALID ACCURACY: %.3f, VALID AUROC: %.3f' %
+                        (epoch + 1, accuracy,auroc ))
                     print('[EPOCH %d] TEST ACCURACY: %.3f, TEST AUROC: %.3f' %
                         (epoch + 1, test_accuracy,test_auroc ))
                     if opt.task =='multiclass':
-                        if test_accuracy > best_test_accuracy:
-                            best_test_accuracy = test_accuracy
+                        if accuracy > best_valid_accuracy:
+                            best_valid_accuracy = accuracy
                             best_test_auroc = test_auroc
+                            best_test_accuracy = test_accuracy
                             torch.save(model.state_dict(),'%s/bestmodel.pth' % (modelsave_path))
                     else:
-                        if test_accuracy > best_test_accuracy:
-                            best_test_accuracy = test_accuracy
+                        if accuracy > best_valid_accuracy:
+                            best_valid_accuracy = accuracy
                             best_test_auroc = test_auroc
+                            best_test_accuracy = test_accuracy
                             torch.save(model.state_dict(),'%s/bestmodel.pth' % (modelsave_path))
 
                 else:
                     try:
-                        train_rmse = mean_sq_error(model, trainloader, device,vision_dset)    
+                        train_rmse = mean_sq_error(model, trainloader, device,vision_dset)
                         print('[EPOCH %d] TRAIN RMSE: %.3f' %
                             (epoch + 1, train_rmse ))
                     except:
                         pass
-                    test_rmse = mean_sq_error(model, testloader, device,vision_dset)  
+                    valid_rmse = mean_sq_error(model, validloader, device,vision_dset)
+                    test_rmse = mean_sq_error(model, testloader, device,vision_dset)
+                    print('[EPOCH %d] VALID RMSE: %.3f' %
+                        (epoch + 1, valid_rmse ))
                     print('[EPOCH %d] TEST RMSE: %.3f' %
                         (epoch + 1, test_rmse ))
-                    if test_rmse < best_test_rmse:
+                    if valid_rmse < best_valid_rmse:
+                        best_valid_rmse = valid_rmse
                         best_test_rmse = test_rmse
                         torch.save(model.state_dict(),'%s/bestmodel.pth' % (modelsave_path))
             model.train()

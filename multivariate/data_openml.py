@@ -40,12 +40,12 @@ def data_split(X,y,nan_mask,indices):
     return x_d, y_d
 
 
-def data_prep_openml(validation=False):
+def data_prep_openml():
     
     np.random.seed(42)
     
     with open("../data/agricultural_exports.pkl", 'rb') as f:
-        X, y, X_train, X_test, y_train, y_test = pickle.load(f)
+        X, y, X_train, X_test, X_valid, y_train, y_test, y_valid = pickle.load(f)
 
     cat_idxs = list()
     con_idxs = list(range(0, X.shape[1]))
@@ -53,34 +53,17 @@ def data_prep_openml(validation=False):
     cat_dims = []
     
     y_mean, y_std = y.mean(0), y.std(0)
-    y_train = (y_train - y_mean) / y_std
-    y_test = (y_test - y_mean) / y_std
+    # y_train = (y_train - y_mean) / y_std
+    # y_test = (y_test - y_mean) / y_std
+    # y_valid = (y_valid - y_mean) / y_std
 
-    if validation:
-        split_index = len(y_test) // 2
-        y_valid = y_test[split_index:]
-        y_test = y_test[:split_index]
-        X_valid = X_test[split_index:]
-        X_test = X_test[:split_index]
-
-        X_valid = {
-            'data': X_valid,
-            'mask': np.ones(X_valid.shape, dtype=int)
-        }
-
-        y_valid = {
-            'data': y_valid.reshape(-1, 1)
-        }
-    else:
-        X_valid = {
-            'data': [[]],
-            'mask': [[]]
-        }
-
-        y_valid = {
-            'data': []
-        }
-
+    X_valid = {
+        'data': X_valid,
+        'mask': np.ones(X_valid.shape, dtype=int)
+    }
+    y_valid = {
+        'data': y_valid.reshape(-1, 1)
+    }
     X_train = {
         'data': X_train,
         'mask': np.ones(X_train.shape, dtype=int)
